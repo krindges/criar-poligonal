@@ -10,6 +10,7 @@ from pyproj import Proj, Transformer
 def geodetic_to_utm(lat, lon):
     """Converte coordenadas geodésicas (lat, lon) para UTM."""
     # Determinar o fuso UTM baseado na longitude
+    
     utm_zone = int((lon + 180) / 6) + 1
     proj_string = f"+proj=utm +zone={utm_zone} +datum=WGS84 +units=m +no_defs"
     
