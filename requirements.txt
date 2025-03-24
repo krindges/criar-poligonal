@@ -1,10 +1,7 @@
-ortools
-xlrd
-matplotlib
-streamlit
-geopy
-folium
-streamlit_folium
-io
-pandas
-pyproj
+streamlit>=1.29.0
+pandas>=1.5.0
+folium>=0.14.0
+streamlit-folium>=0.14.0
+geopy>=2.3.0
+pyproj>=3.6.0
+xlsxwriter>=3.1.0
