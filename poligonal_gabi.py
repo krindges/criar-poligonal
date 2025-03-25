@@ -381,5 +381,3 @@ if st.sidebar.button("🔃 Reiniciar Tudo"):
         st.warning("⚠️ Confirme a exclusão para reiniciar")
 
 st.sidebar.checkbox("Confirmar exclusão", key="confirmar_remocao")
-
-#criar_gmsh(df)
