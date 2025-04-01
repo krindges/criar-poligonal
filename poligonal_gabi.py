@@ -129,6 +129,9 @@ mapa = folium.Map(location=st.session_state.ultimo_ponto, zoom_start=zoom)
 # 5. Cria o marcador e adciona as poliognais do rio e das ilhas
 # =======================================================================
 
+# Inicializando contador global de pontos
+contador_pontos = 1
+
 # Adicionando os pontos individuais ao mapa como marcadores circulares vermelhos
 for i, coord in enumerate(st.session_state.coordenadas):
     folium.CircleMarker(
@@ -138,8 +141,9 @@ for i, coord in enumerate(st.session_state.coordenadas):
         fill=True,
         fill_color="red",
         fill_opacity=1.0,
-        tooltip=f"Ponto {i+1}: ({coord[0]:.6f}, {coord[1]:.6f})"  # Adiciona tooltip com coordenadas
+        tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"  # Adiciona tooltip com coordenadas
     ).add_to(mapa)
+    contador_pontos += 1
 
 # Adicionando a poligonal atual (se houver mais de 2 pontos)
 if len(st.session_state.coordenadas) > 2:
@@ -154,8 +158,7 @@ if len(st.session_state.coordenadas) > 2:
 
 # Adicionando a poligonal principal, se já foi salva
 if st.session_state.poligonal_principal:
-    # Adiciona cada ponto com tooltip
-    for i, coord in enumerate(st.session_state.poligonal_principal):
+    for coord in st.session_state.poligonal_principal:
         folium.CircleMarker(
             location=coord,
             radius=4,
@@ -163,8 +166,9 @@ if st.session_state.poligonal_principal:
             fill=True,
             fill_color="green",
             fill_opacity=0.7,
-            tooltip=f"Rio Ponto {i+1}: ({coord[0]:.6f}, {coord[1]:.6f})"
+            tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"
         ).add_to(mapa)
+        contador_pontos += 1
     
     folium.Polygon(
         locations=st.session_state.poligonal_principal,
@@ -173,13 +177,12 @@ if st.session_state.poligonal_principal:
         fill=True,
         fill_color="green",
         fill_opacity=0.4,
-        tooltip="Poligonal do Rio"  # Tooltip para a área toda
+        tooltip="Poligonal do Rio"
     ).add_to(mapa)
 
 # Adicionando poligonais secundárias, se houver
 for idx, poligono in enumerate(st.session_state.poligonais_secundarias):
-    # Adiciona cada ponto com tooltip
-    for i, coord in enumerate(poligono):
+    for coord in poligono:
         folium.CircleMarker(
             location=coord,
             radius=4,
@@ -187,8 +190,9 @@ for idx, poligono in enumerate(st.session_state.poligonais_secundarias):
             fill=True,
             fill_color="magenta",
             fill_opacity=0.7,
-            tooltip=f"Ilha {idx+1} Ponto {i+1}: ({coord[0]:.6f}, {coord[1]:.6f})"
+            tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"
         ).add_to(mapa)
+        contador_pontos += 1
     
     folium.Polygon(
         locations=poligono,
@@ -197,7 +201,7 @@ for idx, poligono in enumerate(st.session_state.poligonais_secundarias):
         fill=True,
         fill_color="magenta",
         fill_opacity=0.4,
-        tooltip=f"Poligonal da Ilha {idx+1}"  # Tooltip para a área toda
+        tooltip=f"Poligonal da Ilha {idx+1}"
     ).add_to(mapa)
 
 
