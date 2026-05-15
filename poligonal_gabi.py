@@ -1,20 +1,16 @@
+import math
 import streamlit as st
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import folium
 from streamlit_folium import st_folium
-from io import BytesIO
-import streamlit as st
 import pandas as pd
-from pyproj import Proj, Transformer
-
-# ===========================================================
-# 1. Definição da Interface e dicas de uso 
-# ===========================================================
+from io import BytesIO
 
 st.set_page_config(page_title="Mundo Poligonal", layout="wide")
 st.title("🌐Mapa com Poligonais Interativas")
 
+# ✅ Passo a passo logo no início
 with st.expander("ℹ️ Como usar o sistema", expanded=True):
     st.markdown("""
     ### 📝 Guia Completo de Uso
@@ -41,16 +37,21 @@ with st.expander("ℹ️ Como usar o sistema", expanded=True):
     - ❌ **Apagar Última Coordenada**: Remove o último ponto adicionado
     - 🗑️ **Remover Última Poligonal**: Exclui a última poligonal salva
     - 🔃 **Reiniciar Tudo** (com confirmação):
-    - Volta para a posição inicial
-    - Remove TODAS as poligonais
+       - Volta para a posição inicial
+       - Remove TODAS as poligonais
 
     #### 💾 Exportação de Dados
+    **Excel (.xlsx)**
     1. Clique em 💾 **Salvar Todas as Poligonais**
-    2. Baixe o arquivo Excel com 📥 **Baixar Arquivo Excel**
-    3. Baixe o arquivo GMSH com 📥 **Baixar Arquivo GMSH**
+    2. Visualize a tabela com todas as coordenadas
+    3. Baixe o arquivo com 📥 **Baixar Arquivo Excel**
 
-    > ⚠️ **IMPORTANTE:** Para abrir corretamente o arquivo GMSH gerado, é necessário usar a versão **2.5.0** do GMSH.  
-    > Versões mais recentes podem **não interpretar os dados corretamente**.
+    **GMSH (.geo)**
+    1. Clique em 🔷 **Exportar para GMSH (.geo)**
+    2. Baixe o arquivo com 📥 **Baixar Arquivo .geo**
+    - As coordenadas são convertidas automaticamente de lat/lon para **UTM (metros)**
+    - A zona UTM é determinada automaticamente pela localização da poligonal
+    - O arquivo pode ser aberto diretamente no GMSH para geração de malhas
 
     #### ⚠️ Boas Práticas
     - Sempre comece pela poligonal do rio
@@ -59,10 +60,6 @@ with st.expander("ℹ️ Como usar o sistema", expanded=True):
     ---
     🎦 **Dica**: Cliques acidentais? Use ❌ Apagar Última Coordenada para corrigir!
     """)
-
-# ===========================================================
-# 2. Local de armazenamento dos dados
-# ===========================================================
 
 # Inicializar variáveis no session_state para armazenar dados ao longo da execução
 if "coordenadas" not in st.session_state:
@@ -79,10 +76,6 @@ if "ultimo_ponto" not in st.session_state:
 
 if "mensagens" not in st.session_state:
     st.session_state.mensagens = []  # Lista para armazenar mensagens de status
-
-# ===========================================================
-# 3. Comando para fazer a barra de busca das cidades
-# ===========================================================
 
 # Barra de busca de cidades
 st.sidebar.subheader("🔍 Buscar Localização")
@@ -117,33 +110,20 @@ if st.sidebar.button("Buscar"):
         except Exception as e:
             st.sidebar.error(f"❌ Erro inesperado: {str(e)}")
 
-# ================================================================
-# 4. Centralização do mapa a partir do zoom usado pelo usuário
-# ================================================================
-
 # Criando o mapa centralizado no último ponto adicionado
 zoom = st.session_state.get("zoom_level", 12)  # Usa o zoom_level se existir, senão usa 30
 mapa = folium.Map(location=st.session_state.ultimo_ponto, zoom_start=zoom)
 
-# ===================================================================
-# 5. Cria o marcador e adciona as poliognais do rio e das ilhas
-# =======================================================================
-
-# Inicializando contador global de pontos
-contador_pontos = 1
-
 # Adicionando os pontos individuais ao mapa como marcadores circulares vermelhos
-for i, coord in enumerate(st.session_state.coordenadas):
+for coord in st.session_state.coordenadas:
     folium.CircleMarker(
         location=coord,
-        radius=4,
+        radius=4,  # 🔴 Tamanho do marcador
         color="red",
         fill=True,
         fill_color="red",
-        fill_opacity=1.0,
-        tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"  # Adiciona tooltip com coordenadas
+        fill_opacity=1.0
     ).add_to(mapa)
-    contador_pontos += 1
 
 # Adicionando a poligonal atual (se houver mais de 2 pontos)
 if len(st.session_state.coordenadas) > 2:
@@ -158,56 +138,26 @@ if len(st.session_state.coordenadas) > 2:
 
 # Adicionando a poligonal principal, se já foi salva
 if st.session_state.poligonal_principal:
-    for coord in st.session_state.poligonal_principal:
-        folium.CircleMarker(
-            location=coord,
-            radius=4,
-            color="green",
-            fill=True,
-            fill_color="green",
-            fill_opacity=0.7,
-            tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"
-        ).add_to(mapa)
-        contador_pontos += 1
-    
     folium.Polygon(
         locations=st.session_state.poligonal_principal,
-        color="green",
+        color="green",  # Verde para a poligonal principal
         weight=3,
         fill=True,
         fill_color="green",
-        fill_opacity=0.4,
-        tooltip="Poligonal do Rio"
+        fill_opacity=0.4
     ).add_to(mapa)
 
 # Adicionando poligonais secundárias, se houver
-for idx, poligono in enumerate(st.session_state.poligonais_secundarias):
-    for coord in poligono:
-        folium.CircleMarker(
-            location=coord,
-            radius=4,
-            color="magenta",
-            fill=True,
-            fill_color="magenta",
-            fill_opacity=0.7,
-            tooltip=f"Ponto {contador_pontos}: ({coord[0]:.6f}, {coord[1]:.6f})"
-        ).add_to(mapa)
-        contador_pontos += 1
-    
+for poligono in st.session_state.poligonais_secundarias:
     folium.Polygon(
         locations=poligono,
-        color="magenta",
+        color="magenta",  # Magenta para as poligonais secundárias
         weight=2,
         fill=True,
         fill_color="magenta",
-        fill_opacity=0.4,
-        tooltip=f"Poligonal da Ilha {idx+1}"
+        fill_opacity=0.4
     ).add_to(mapa)
 
-
-# =================================================================================
-# 6. Captura as coordenadas o zoom, mantendo na forma utilizada pelo usuário 
-# ===============================================================================
 # Renderizando o mapa interativo e capturando cliques do usuário
 st.subheader("Mapa Interativo")
 map_data = st_folium(
@@ -232,18 +182,9 @@ if map_data and "last_clicked" in map_data and map_data["last_clicked"] is not N
         
         st.rerun()  # Atualiza a interface
 
-
-# ==============================================================================
-# 7. Comando para exibir abaixo do mapa as coordenadas que foram capturadas
-# ===============================================================================
-
 # Exibir as coordenadas utilizadas na poligonal atual
 #st.subheader("Coordenadas da Poligonal Atual")
 #st.write(st.session_state.coordenadas if st.session_state.coordenadas else "Nenhuma coordenada definida.")
-
-# ===========================================================
-# 9. BOTÕES
-# ===========================================================
 
 # Botão para excluir a última poligonal salva
 if st.sidebar.button("🗑️ Remover Última Poligonal"):
@@ -297,123 +238,83 @@ if st.session_state.poligonal_principal:
 else:
     st.sidebar.warning("⚠️ Salve a poligonal do rio primeiro!")
 
-# ================================================================================
-# 8. Mensagem de exibição dos comandos que foram realizados pelo usuário
-# =================================================================================
-
 # Exibir mensagens de status na barra lateral
 st.sidebar.subheader("Status das Poligonais")
 for mensagem in st.session_state.mensagens:
     st.sidebar.success(mensagem)
 
-# ========================================================================================
-# 9. Cria uma função, converte as coordenadas para UTM e gera de arquivo txt para o GMSH
-# ========================================================================================
+def _latlon_para_utm(lat, lon):
+    """Converte lat/lon WGS84 para coordenadas UTM (metros)."""
+    a = 6378137.0
+    f = 1 / 298.257223563
+    e2 = 2 * f - f ** 2
+    e2l = e2 / (1 - e2)
+    zona = int((lon + 180) / 6) + 1
+    lon0 = math.radians(-183 + zona * 6)
+    latr = math.radians(lat)
+    lonr = math.radians(lon)
+    N = a / math.sqrt(1 - e2 * math.sin(latr) ** 2)
+    T = math.tan(latr) ** 2
+    C = e2l * math.cos(latr) ** 2
+    A = math.cos(latr) * (lonr - lon0)
+    M = a * (
+        (1 - e2/4 - 3*e2**2/64 - 5*e2**3/256) * latr
+        - (3*e2/8 + 3*e2**2/32 + 45*e2**3/1024) * math.sin(2*latr)
+        + (15*e2**2/256 + 45*e2**3/1024) * math.sin(4*latr)
+        - (35*e2**3/3072) * math.sin(6*latr)
+    )
+    k0 = 0.9996
+    x = k0 * N * (A + (1-T+C)*A**3/6 + (5-18*T+T**2+72*C-58*e2l)*A**5/120) + 500000
+    y = k0 * (M + N * math.tan(latr) * (
+        A**2/2 + (5-T+9*C+4*C**2)*A**4/24 + (61-58*T+T**2+600*C-330*e2l)*A**6/720
+    ))
+    if lat < 0:
+        y += 10000000
+    return x, y, zona
 
-def geodetic_to_utm(lat, lon):
-    """Converte coordenadas geodésicas (lat, lon) para coordenadas UTM."""
-    
-    # Determina o fuso UTM com base na longitude
-    utm_zone = int((lon + 180) / 6) + 1
 
-    # Define a string de projeção com base no fuso UTM calculado
-    proj_string = f"+proj=utm +zone={utm_zone} +datum=WGS84 +units=m +no_defs"
-    
-    # Cria um transformador de coordenadas de geodésicas (EPSG:4326) para UTM
-    transformer = Transformer.from_crs("EPSG:4326", proj_string, always_xy=True)
-    
-    # Converte latitude/longitude para coordenadas UTM (x: leste, y: norte)
-    easting, northing = transformer.transform(lon, lat)
-    return utm_zone, easting, northing
+def gerar_gmsh():
+    """Gera o arquivo .geo no formato GMSH para todas as poligonais."""
+    if not st.session_state.poligonal_principal:
+        return None, "Nenhuma poligonal disponível para exportar!"
 
-def criar_gmsh(df):
-    # Cria uma coluna com número sequencial para os nós
-    df['num_no'] = range(1, len(df)+1)
+    saida = []
+    pid = 1
+    lid = 1
+    loops = []
 
-    # Mantém apenas as colunas relevantes na ordem desejada
-    df = df[['num_no', 'Tipo', 'Latitude', 'Longitude']]
+    lat0, lon0_ref = st.session_state.poligonal_principal[0]
+    _, _, zona = _latlon_para_utm(lat0, lon0_ref)
+    hemi = "S" if lat0 < 0 else "N"
+    saida.append(f"// Projeção: UTM Zona {zona}{hemi} (WGS84)")
+    saida.append("")
 
-    # Converte coordenadas geográficas para UTM e adiciona como colunas novas
-    df[["UTM_Zone", "x", "y"]] = df.apply(lambda row: geodetic_to_utm(row["Latitude"], row["Longitude"]), axis=1, result_type="expand")
+    todas = [st.session_state.poligonal_principal] + st.session_state.poligonais_secundarias
 
-    # Recalcula os números dos nós (pode ser redundante aqui)
-    df['num_no'] = range(1, len(df)+1)
+    for idx, pontos in enumerate(todas):
+        n = len(pontos)
+        p_ini = pid
+        l_ini = lid
+        loop_num = idx + 1
 
-    # Converte a coluna de fuso UTM para inteiro (evita tipo float ou string)
-    df["UTM_Zone"] = df["UTM_Zone"].astype(int)
+        for lat, lon in pontos:
+            x, y, _ = _latlon_para_utm(lat, lon)
+            saida.append(f"Point({pid}) = {{ {x:.4f}, {y:.4f}, 0 }};")
+            pid += 1
 
-    # Filtra apenas os pontos da poligonal principal (o "Rio")
-    df_rio = df[df['Tipo'] == 'Rio'].reset_index(drop=True)
+        for i in range(n):
+            saida.append(f"Line({lid}) = {{ {p_ini + i}, {p_ini + (i + 1) % n} }};")
+            lid += 1
 
-    # Último número de nó do rio
-    fim_rio = df_rio.at[df_rio.index[-1], 'num_no']
+        all_lines = list(range(l_ini, lid))
+        saida.append(f"Line Loop({loop_num}) = {{ {', '.join(map(str, all_lines))} }};")
+        saida.append("")
+        loops.append(loop_num)
 
-    # Lista onde será armazenado o conteúdo do arquivo .geo
-    gmsh = []
+    saida.append(f"Plane Surface(1) = {{ {', '.join(map(str, loops))} }};")
 
-    # Criação dos pontos (Point) do rio no formato GMSH
-    for i in range(1, fim_rio+1):
-        no = f'Point({i})={{ {df_rio.at[i-1, "x"]}, {df_rio.at[i-1, "y"]}, 0}};'
-        gmsh.append(no)
+    return "\n".join(saida).encode("utf-8"), None
 
-    # Criação das linhas (Line) conectando os pontos do rio
-    loop = '{'
-    for i in range(1, fim_rio+1):
-        linha = f'Line({i})={{ {i}, {i+1 if i+1 != fim_rio+1 else 1} }};'  # fecha o loop no final
-        gmsh.append(linha)
-        loop += f'{i},'
-    loop = loop[:-1]  # remove a última vírgula
-    gmsh.append(f'Line Loop(1) = {loop}}};')  # define o contorno principal
-
-    # Quantidade de ilhas, assumindo que tudo que não é 'Rio' é uma ilha
-    qtd_ilhas = len(df['Tipo'].unique()) - 1
-
-    # Define a superfície que conterá o rio e as ilhas (com ilhas sendo buracos)
-    loop2 = '{1,'  # inicia com o loop da linha do rio (positivo)
-
-    # Para cada ilha...
-    for ilha in range(1, qtd_ilhas+1):
-        nome_ilha = f'Ilha_{ilha}'
-
-        # Filtra os dados da ilha atual
-        df_ilha = df[df['Tipo'] == nome_ilha].reset_index(drop=True)
-
-        # Criação dos pontos da ilha
-        for i in range(df_ilha.at[0, 'num_no'], df_ilha.at[df_ilha.index[-1], 'num_no']+1):
-            no = f'Point({i})={{ {df.at[i-1, "x"]}, {df.at[i-1, "y"]}, 0}};'
-            gmsh.append(no)
-
-        # Criação das linhas da ilha
-        loop = '{'
-        for i in range(df_ilha.at[0, 'num_no'], df_ilha.at[df_ilha.index[-1], 'num_no']+1):
-            linha = f'Line({i})={{ {i}, {i+1 if i+1 != df_ilha.at[df_ilha.index[-1], "num_no"]+1 else df_ilha.at[0, "num_no"]} }};'
-            gmsh.append(linha)
-            loop += f'{i},'
-        loop = loop[:-1]
-        gmsh.append(f'Line Loop({ilha+1}) = {loop}}};')
-
-        # Adiciona o loop da ilha como buraco (com sinal negativo)
-        loop2 += f'{-ilha-1},'
-
-    loop2 = loop2[:-1]  # remove última vírgula
-
-    # Define a superfície com buracos (ilhas)
-    gmsh.append(f'Plane Surface(1) = {loop2}}};')
-
-    # Junta tudo em uma string
-    gmsh_text = '\n'.join(gmsh)
-
-    # Cria um arquivo em memória com o conteúdo do GMSH
-    buffer = BytesIO()
-    buffer.write(gmsh_text.encode('utf-8'))
-    buffer.seek(0)
-
-    # Retorna o arquivo pronto para ser baixado
-    return buffer
-
-# ===========================================================
-# 10. Cria a função para salvar os dados do Excel
-# ===========================================================
 
 # **Função para salvar todas as poligonais em um arquivo Excel**
 def salvar_coordenadas():
@@ -440,15 +341,9 @@ def salvar_coordenadas():
             df.to_excel(writer, sheet_name="Poligonais", index=False)
         
         output.seek(0)  # Retornar ao início do arquivo para o download
-        
         return output, df
 
     return None
-
-
-# ==================================================================================
-# 11. Botão de salvar os dados, e botões de download do arquivo em Excel e GMSH
-# =================================================================================
 
 # Botão para salvar todas as poligonais em um arquivo Excel e disponibilizar para download
 if st.sidebar.button("💾 Salvar Todas as Poligonais"):
@@ -464,22 +359,27 @@ if st.sidebar.button("💾 Salvar Todas as Poligonais"):
         st.dataframe(df)
         if excel_file:
             st.success("✅ Poligonais salvas com sucesso! Agora você já pode fazer o download da sua planilha do Excel.")
-            st.sidebar.download_button(
+            st.download_button(
                 label="📥 Baixar Arquivo Excel",
                 data=excel_file,
                 file_name="poligonais.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            st.sidebar.download_button(
-                label="📥 Baixar Arquivo GMSH",
-                data=criar_gmsh(df),
-                file_name="malha.txt",
-                mime="text/plain"
-            )
 
-# ===========================================================================================
-# 12. RESETA O SITE, em outras palavras, reinicia a ferramenta de marcar poligonais do zero
-# ===========================================================================================
+
+# Botão para exportar no formato GMSH (.geo)
+if st.sidebar.button("🔷 Exportar para GMSH (.geo)"):
+    geo_bytes, erro = gerar_gmsh()
+    if erro:
+        st.warning(f"⚠️ {erro}")
+    else:
+        st.success("✅ Arquivo GMSH gerado com sucesso!")
+        st.download_button(
+            label="📥 Baixar Arquivo .geo",
+            data=geo_bytes,
+            file_name="poligonais.geo",
+            mime="text/plain"
+        )
 
 # Lógica: define a checkbox, mas ainda não exibe
 confirmar_remocao = st.session_state.get("confirmar_remocao", False)
@@ -493,11 +393,11 @@ if st.sidebar.button("🔃 Reiniciar Tudo"):
         st.session_state.poligonais_secundarias = []
         st.session_state.mensagens = []
         
-        # Volta para posição inicial (São Paulo)
+        # Volta para posição inicial (Cuiabá/MT)
         st.session_state.ultimo_ponto = [-15.608041311445879, -56.06389224529267]  # Coordenadas iniciais
         
         # Mantém o zoom atual (opcional - remova esta linha se quiser resetar o zoom também)
-        st.session_state.zoom_level = 35  # Descomente para definir um zoom padrão
+        st.session_state.zoom_level = 12  # Descomente para definir um zoom padrão
         
         st.success("✅ Reset completo realizado! Voltando à posição inicial.")
         st.rerun()
